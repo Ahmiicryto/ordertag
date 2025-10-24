@@ -1,15 +1,24 @@
 import axios from "axios";
 
+export const config = {
+  api: {
+    bodyParser: false, // disable automatic body parsing
+  },
+};
+
 export default async function handler(req, res) {
-  // Only allow POST (Shopify webhook sends POST)
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const order = req.body;
+    // Convert raw request stream to JSON
+    const buffers = [];
+    for await (const chunk of req) buffers.push(chunk);
+    const data = Buffer.concat(buffers).toString();
+    const order = JSON.parse(data);
 
-    // Check ad source (source_name or landing_site)
+    // Detect ad source
     const source =
       (order.source_name?.toLowerCase() || order.landing_site?.toLowerCase() || "");
 
@@ -19,7 +28,7 @@ export default async function handler(req, res) {
     if (isAdOrder) {
       const orderId = order.id;
 
-      // Update order tag to "Paid"
+      // Add tag to order
       await axios.put(
         `https://${process.env.SHOPIFY_STORE}/admin/api/2024-10/orders/${orderId}.json`,
         {
