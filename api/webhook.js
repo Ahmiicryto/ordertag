@@ -83,6 +83,40 @@ export default async function handler(req, res) {
 
     console.log(`📊 UTM Parameters:`, utmParams);
 
+    // 🎯 PAID CAMPAIGN WORDS LIST
+    const paidCampaignWords = [
+      // Ads Related
+      'ads', 'ad', 'cpc', 'ppc', 'paid', 'sponsored', 'promoted',
+      
+      // Campaign Types
+      'conversion', 'conversions', 'leadgen', 'leadgeneration',
+      'traffic', 'click', 'clicks', 'impression', 'impressions',
+      
+      // Retargeting
+      'retargeting', 'remarketing', 'prospecting', 'lookalike',
+      
+      // Sales & Promotions
+      'sale', 'promo', 'discount', 'offer', 'deal', 'flashsale',
+      'blackfriday', 'cybermonday', 'christmas', 'holiday',
+      
+      // Performance
+      'roas', 'roi', 'conversion', 'purchase', 'checkout',
+      
+      // Platform Specific
+      'fbads', 'fbad', 'igads', 'igad', 'googleads',
+      'tiktokads', 'snapads', 'pinterestads',
+      
+      // Bidding Types
+      'auction', 'bid', 'bidding', 'targetcpa', 'targetroas',
+      
+      // Audience Types
+      'customaudience', 'savedaudience', 'similaraudience'
+    ];
+
+    // ✅ CHECK IF CAMPAIGN HAS PAID WORDS
+    const hasPaidCampaignWords = utmParams.utm_campaign && 
+      paidCampaignWords.some(word => utmParams.utm_campaign.includes(word));
+
     // ✅ SAFE PAID ADS DETECTION
     const isPaidAds = 
       // 1. PAID PLATFORMS DIRECT SOURCES (safe check)
@@ -147,20 +181,20 @@ export default async function handler(req, res) {
         referringSite.includes('utm_medium=paid')
       )) ||
 
-      // 6. PAID CAMPAIGN INDICATORS (safe check)
-      (utmParams.utm_campaign && (
-        utmParams.utm_campaign.includes('ads') ||
-        utmParams.utm_campaign.includes('cpc') ||
-        utmParams.utm_campaign.includes('ppc') ||
-        utmParams.utm_campaign.includes('promo') ||
-        utmParams.utm_campaign.includes('sale') ||
-        utmParams.utm_campaign.includes('conversion') ||
-        utmParams.utm_campaign.includes('retargeting')
-      ));
+      // 6. 🎯 PAID CAMPAIGN WORDS DETECTION (NEW)
+      hasPaidCampaignWords;
 
     // 🎯 ONLY TAG IF PAID ADS
     if (isPaidAds) {
       console.log(`🏷️ PAID ADS DETECTED - Adding "Paid" tag`);
+      
+      // Log detection reason
+      if (hasPaidCampaignWords) {
+        console.log(`   - Campaign words detected: "${utmParams.utm_campaign}"`);
+      }
+      if (source) console.log(`   - Source: ${source}`);
+      if (utmParams.utm_medium) console.log(`   - UTM Medium: ${utmParams.utm_medium}`);
+      if (utmParams.utm_source) console.log(`   - UTM Source: ${utmParams.utm_source}`);
 
       // UPDATE TAGS - Only add "Paid" tag
       const existingTags = order.tags ? order.tags.split(',').map(t => t.trim()).filter(t => t) : [];
@@ -202,7 +236,8 @@ export default async function handler(req, res) {
         success: true,
         message: `Order tagged as Paid`,
         orderNumber: orderNumber,
-        trafficSource: 'Paid'
+        trafficSource: 'Paid',
+        detectionReason: hasPaidCampaignWords ? 'campaign_words' : 'other_paid_source'
       });
 
     } else {
