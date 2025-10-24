@@ -1,17 +1,9 @@
 {
-  "name": "shopify-order-tagger",
+  "name": "shopify-auto-tag",
   "version": "1.0.0",
-  "description": "Auto-tag Shopify orders by referring site (no UTM required)",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  },
+  "main": "api/webhook.js",
+  "type": "module",
   "dependencies": {
-    "express": "^4.18.2",
-    "node-fetch": "^2.6.7",
-    "raw-body": "^2.4.1"
+    "axios": "^1.6.8"
   }
 }
