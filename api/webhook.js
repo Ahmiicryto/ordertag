@@ -1,56 +1,47 @@
+import express from "express";
+import bodyParser from "body-parser";
 import axios from "axios";
 
-export const config = {
-  api: {
-    bodyParser: false, // disable automatic body parsing
-  },
-};
+const app = express();
+app.use(bodyParser.json());
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+// Replace this with your Shopify API access token & store name
+const SHOPIFY_ACCESS_TOKEN = "your_shopify_token_here";
+const SHOPIFY_STORE = "your-store-name.myshopify.com";
 
+app.post("/api/webhook", async (req, res) => {
   try {
-    // Convert raw request stream to JSON
-    const buffers = [];
-    for await (const chunk of req) buffers.push(chunk);
-    const data = Buffer.concat(buffers).toString();
-    const order = JSON.parse(data);
+    const order = req.body;
 
-    // Detect ad source
-    const source =
-      (order.source_name?.toLowerCase() || order.landing_site?.toLowerCase() || "");
+    // Step 1: Detect source
+    const site = order.landing_site || order.referring_site || "";
+    const lowerSite = site.toLowerCase();
 
-    const adSources = ["facebook", "instagram", "google", "tiktok", "snapchat"];
-    const isAdOrder = adSources.some((src) => source.includes(src));
-
-    if (isAdOrder) {
-      const orderId = order.id;
-
-      // Add tag to order
-      await axios.put(
-        `https://${process.env.SHOPIFY_STORE}/admin/api/2024-10/orders/${orderId}.json`,
-        {
-          order: {
-            id: orderId,
-            tags: `${order.tags ? order.tags + ", " : ""}Paid`
-          }
-        },
-        {
-          headers: {
-            "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
-            "Content-Type": "application/json"
-          }
-        }
-      );
-
-      console.log(`✅ Paid tag added to order: ${orderId}`);
+    let tag = "Organic";
+    const paidSources = ["facebook", "instagram", "google", "tiktok", "snapchat"];
+    if (paidSources.some(src => lowerSite.includes(src))) {
+      tag = "Paid";
     }
 
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error("❌ Error:", err.message);
-    res.status(500).json({ error: err.message });
+    // Step 2: Add tag to Shopify order
+    const orderId = order.id;
+    await axios.post(
+      `https://${SHOPIFY_STORE}/admin/api/2024-10/orders/${orderId}/tags.json`,
+      { tags: tag },
+      {
+        headers: {
+          "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    console.log(`✅ Order ${orderId} tagged as ${tag}`);
+    res.status(200).send(`Tag ${tag} applied successfully`);
+  } catch (error) {
+    console.error("❌ Error tagging order:", error.message);
+    res.status(500).send("Error tagging order");
   }
-}
+});
+
+export default app;
