@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export default async function handler(req, res) {
-  // Simple deployment check
+  // Deployment check
   if (req.method === "GET") {
     return res.status(200).json({ message: "✅ Webhook is live and working!" });
   }
@@ -13,94 +13,129 @@ export default async function handler(req, res) {
   const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
   const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 
-  // Verify environment variables
+  // Environment check
   if (!SHOPIFY_ACCESS_TOKEN || !SHOPIFY_STORE) {
-    console.error("❌ Missing environment variables");
     return res.status(500).json({
       success: false,
-      message: "Server configuration error",
+      message: "Server configuration error - Check environment variables",
     });
   }
 
   try {
-    const order = req.body;
-    console.log("📦 New order received:", order.id);
+    const webhookPayload = req.body;
+    console.log("📦 Webhook received for order:", webhookPayload.id);
 
-    // Validate order data
+    // Shopify webhook format
+    const order = webhookPayload.order || webhookPayload;
+    
     if (!order || !order.id) {
-      console.error("❌ Invalid order data received");
       return res.status(400).json({
         success: false,
-        message: "Invalid order data",
+        message: "No order data found",
       });
     }
 
-    // Determine tag (Organic or Paid Ads)
-    const source = order.source_name?.toLowerCase() || "";
-    let tag = "Organic";
-
-    if (
-      source.includes("google") ||
-      source.includes("facebook") ||
-      source.includes("instagram") ||
-      source.includes("tiktok") ||
-      source.includes("snapchat") ||
-      source.includes("meta")
-    ) {
-      tag = "Paid Ads";
-    }
-
-    console.log(`🏷️ Tag to apply: ${tag}`);
-
-    // Combine old + new tags
-    const existingTags = order.tags ? order.tags.split(",").map(t => t.trim()) : [];
-    if (!existingTags.includes(tag)) {
-      existingTags.push(tag);
-    }
-
-    // Use the correct order ID format for Shopify API
-    // The webhook sends the full order object, use the ID directly
     const orderId = order.id;
+    const orderNumber = order.order_number || order.name || 'N/A';
+    console.log(`🆔 Processing Order #${orderNumber} (ID: ${orderId})`);
 
-    // Update order tags in Shopify
-    const updateResponse = await axios.put(
-      `https://${SHOPIFY_STORE}/admin/api/2024-10/orders/${orderId}.json`,
-      {
-        order: {
-          id: orderId,
-          tags: existingTags.join(", "),
-        },
-      },
+    // 🏷️ SOURCE DETECTION LOGIC
+    const source = order.source_name?.toLowerCase() || '';
+    const landingSite = order.landing_site?.toLowerCase() || '';
+    const referringSite = order.referring_site?.toLowerCase() || '';
+    
+    console.log(`🔍 Source: ${source}`);
+    console.log(`🌐 Landing Site: ${landingSite}`);
+    console.log(`🔗 Referring Site: ${referringSite}`);
+
+    let trafficSource = "Organic"; // Default
+
+    // ✅ PAID SOURCES (Facebook, Instagram, Google Ads)
+    const paidSources = [
+      "facebook",
+      "instagram", 
+      "google",
+      "tiktok",
+      "snapchat",
+      "meta",
+      "social",
+      "ad",
+      "cpc"
+    ];
+
+    // ✅ Check if it's paid traffic
+    const isPaidSource = paidSources.some(paidSource => 
+      source.includes(paidSource) ||
+      landingSite.includes(paidSource) ||
+      referringSite.includes(paidSource)
+    );
+
+    // ✅ Check for organic Google Search
+    const isOrganicGoogle = 
+      referringSite.includes('google.com') && 
+      (referringSite.includes('q=') || referringSite.includes('search'));
+
+    if (isPaidSource) {
+      trafficSource = "Paid";
+    } else if (isOrganicGoogle) {
+      trafficSource = "Organic";
+    }
+
+    console.log(`🏷️ Detected Traffic Source: ${trafficSource}`);
+
+    // 🎯 UPDATE TAGS
+    const existingTags = order.tags ? order.tags.split(',').map(t => t.trim()).filter(t => t) : [];
+    
+    // Remove old source tags if exist
+    const cleanTags = existingTags.filter(tag => 
+      !['Paid', 'Organic', 'Traffic Source'].includes(tag)
+    );
+
+    // Add new tag
+    if (!cleanTags.includes(trafficSource)) {
+      cleanTags.push(trafficSource);
+    }
+
+    const updatedTags = cleanTags.join(', ');
+    console.log(`📝 Final Tags: ${updatedTags}`);
+
+    // 🚀 UPDATE ORDER IN SHOPIFY
+    const shopifyUrl = `https://${SHOPIFY_STORE}/admin/api/2024-10/orders/${orderId}.json`;
+    
+    const updateData = {
+      order: {
+        id: orderId,
+        tags: updatedTags
+      }
+    };
+
+    await axios.put(
+      shopifyUrl,
+      updateData,
       {
         headers: {
           "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
           "Content-Type": "application/json",
         },
+        timeout: 10000
       }
     );
 
-    console.log(`✅ Order ${orderId} tagged successfully as ${tag}`);
-    console.log("📝 Shopify response:", updateResponse.data);
+    console.log(`✅ Order #${orderNumber} successfully tagged as: ${trafficSource}`);
 
     return res.status(200).json({
       success: true,
-      message: `Order tagged as ${tag}`,
+      message: `Order tagged as ${trafficSource}`,
+      orderNumber: orderNumber,
+      trafficSource: trafficSource
     });
-  } catch (error) {
-    console.error("❌ Error tagging order:", error.response?.data || error.message);
-    
-    // More detailed error logging
-    if (error.response) {
-      console.error("📋 Error details:", {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      });
-    }
 
+  } catch (error) {
+    console.error("❌ Error:", error.response?.data || error.message);
+    
     return res.status(500).json({
       success: false,
-      message: "Error tagging order",
+      message: "Error processing order",
       error: error.response?.data || error.message,
     });
   }
