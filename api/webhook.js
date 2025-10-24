@@ -5,25 +5,30 @@ import axios from "axios";
 const app = express();
 app.use(bodyParser.json());
 
-// Replace this with your Shopify API access token & store name
-const SHOPIFY_ACCESS_TOKEN = "your_shopify_token_here";
-const SHOPIFY_STORE = "your-store-name.myshopify.com";
+// ✅ Environment variables (set in Vercel Dashboard)
+const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 
+// ✅ Route to confirm deployment
+app.get("/api/webhook", (req, res) => {
+  res.send("🚀 Shopify Order Tagger is LIVE and running successfully!");
+});
+
+// ✅ Webhook endpoint
 app.post("/api/webhook", async (req, res) => {
   try {
     const order = req.body;
-
-    // Step 1: Detect source
     const site = order.landing_site || order.referring_site || "";
     const lowerSite = site.toLowerCase();
 
+    // Detect Paid vs Organic
     let tag = "Organic";
     const paidSources = ["facebook", "instagram", "google", "tiktok", "snapchat"];
     if (paidSources.some(src => lowerSite.includes(src))) {
       tag = "Paid";
     }
 
-    // Step 2: Add tag to Shopify order
+    // Add tag to order
     const orderId = order.id;
     await axios.post(
       `https://${SHOPIFY_STORE}/admin/api/2024-10/orders/${orderId}/tags.json`,
@@ -36,7 +41,7 @@ app.post("/api/webhook", async (req, res) => {
       }
     );
 
-    console.log(`✅ Order ${orderId} tagged as ${tag}`);
+    console.log(`✅ Tagged order ${orderId} as ${tag}`);
     res.status(200).send(`Tag ${tag} applied successfully`);
   } catch (error) {
     console.error("❌ Error tagging order:", error.message);
