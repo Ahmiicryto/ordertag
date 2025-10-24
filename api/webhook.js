@@ -117,7 +117,27 @@ export default async function handler(req, res) {
     const hasPaidCampaignWords = utmParams.utm_campaign && 
       paidCampaignWords.some(word => utmParams.utm_campaign.includes(word));
 
-    // ✅ SAFE PAID ADS DETECTION
+    // 🎯 REFERRING WEBSITE DETECTION
+    const paidReferringWebsites = [
+      // Social Media Platforms
+      'facebook', 'fb.com', 'instagram.', 'ig.com',
+      'tiktok', 'snapchat', 'pinterest.com',
+      'linkedin.com', 'twitter.com', 'x.com', 'youtube',
+      
+      // Advertising Networks
+      'doubleclick.net', 'googleadservices.com', 'googlesyndication.com',
+      'facebook.com/ads', 'instagram.com/ads',
+      
+      // Analytics & Tracking
+      'google.com/ads', 'ads.google.com', 'business.facebook.com',
+      'adsmanager.facebook.com'
+    ];
+
+    // ✅ CHECK REFERRING SITE FOR PAID SOURCES
+    const hasPaidReferringSite = referringSite && 
+      paidReferringWebsites.some(paidSite => referringSite.includes(paidSite));
+
+    // ✅ SAFE PAID ADS DETECTION (ALL CONDITIONS)
     const isPaidAds = 
       // 1. PAID PLATFORMS DIRECT SOURCES (safe check)
       (source && (
@@ -181,20 +201,39 @@ export default async function handler(req, res) {
         referringSite.includes('utm_medium=paid')
       )) ||
 
-      // 6. 🎯 PAID CAMPAIGN WORDS DETECTION (NEW)
-      hasPaidCampaignWords;
+      // 6. 🎯 PAID CAMPAIGN WORDS DETECTION
+      hasPaidCampaignWords ||
+
+      // 7. 🎯 REFERRING WEBSITE DETECTION (NEW)
+      hasPaidReferringSite;
 
     // 🎯 ONLY TAG IF PAID ADS
     if (isPaidAds) {
       console.log(`🏷️ PAID ADS DETECTED - Adding "Paid" tag`);
       
       // Log detection reason
+      let detectionReason = [];
+      
       if (hasPaidCampaignWords) {
+        detectionReason.push('campaign_words');
         console.log(`   - Campaign words detected: "${utmParams.utm_campaign}"`);
       }
-      if (source) console.log(`   - Source: ${source}`);
-      if (utmParams.utm_medium) console.log(`   - UTM Medium: ${utmParams.utm_medium}`);
-      if (utmParams.utm_source) console.log(`   - UTM Source: ${utmParams.utm_source}`);
+      if (hasPaidReferringSite) {
+        detectionReason.push('referring_site');
+        console.log(`   - Referring site: "${referringSite}"`);
+      }
+      if (source) {
+        detectionReason.push('source');
+        console.log(`   - Source: ${source}`);
+      }
+      if (utmParams.utm_medium) {
+        detectionReason.push('utm_medium');
+        console.log(`   - UTM Medium: ${utmParams.utm_medium}`);
+      }
+      if (utmParams.utm_source) {
+        detectionReason.push('utm_source');
+        console.log(`   - UTM Source: ${utmParams.utm_source}`);
+      }
 
       // UPDATE TAGS - Only add "Paid" tag
       const existingTags = order.tags ? order.tags.split(',').map(t => t.trim()).filter(t => t) : [];
@@ -237,7 +276,7 @@ export default async function handler(req, res) {
         message: `Order tagged as Paid`,
         orderNumber: orderNumber,
         trafficSource: 'Paid',
-        detectionReason: hasPaidCampaignWords ? 'campaign_words' : 'other_paid_source'
+        detectionReason: detectionReason.join(', ')
       });
 
     } else {
