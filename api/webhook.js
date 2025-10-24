@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     const orderId = order.id;
     const orderNumber = order.order_number || order.name || 'N/A';
     
-    // 🏷️ SAFE SOURCE DETECTION
+    // 🏷️ SIMPLE SOURCE DETECTION
     const source = String(order.source_name || '').toLowerCase();
     const landingSite = String(order.landing_site || '').toLowerCase();
     const referringSite = String(order.referring_site || '').toLowerCase();
@@ -45,170 +45,55 @@ export default async function handler(req, res) {
     console.log(`🌐 Landing Site: "${landingSite}"`);
     console.log(`🔗 Referring Site: "${referringSite}"`);
 
-    // 🎯 ADVANCED PARAMETERS EXTRACTION
-    const extractAllParams = (url) => {
-      const params = {
-        utm_source: '',
-        utm_medium: '',
-        utm_campaign: '',
-        utm_term: '',
-        utm_content: '',
-        utm_id: '',
-        // Facebook
-        fbclid: '',
-        campaign_id: '',
-        ad_id: '',
-        // Google
-        gclid: '',
-        // TikTok
-        ttclid: '',
-        // Microsoft
-        msclkid: '',
-        // Snapchat
-        scclid: ''
-      };
-      
-      if (!url || typeof url !== 'string') return params;
-      
-      try {
-        const urlObj = new URL(url);
-        
-        // Standard UTM parameters
-        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id'].forEach(param => {
-          const value = urlObj.searchParams.get(param);
-          params[param] = value ? String(value).toLowerCase() : '';
-        });
-        
-        // Platform specific parameters
-        params.fbclid = urlObj.searchParams.get('fbclid') || '';
-        params.campaign_id = urlObj.searchParams.get('campaign_id') || '';
-        params.ad_id = urlObj.searchParams.get('ad_id') || '';
-        params.gclid = urlObj.searchParams.get('gclid') || '';
-        params.ttclid = urlObj.searchParams.get('ttclid') || '';
-        params.msclkid = urlObj.searchParams.get('msclkid') || '';
-        params.scclid = urlObj.searchParams.get('scclid') || '';
-        
-      } catch (e) {
-        // URL parse error
+    // 🎯 ALL PAID PLATFORMS LIST
+    const paidPlatforms = [
+      'facebook',
+      'instagram', 
+      'meta',
+      'tiktok',
+      'snapchat',
+      'pinterest',
+      'linkedin',
+      'twitter',
+      'youtube',
+      'google'
+    ];
+
+    // ✅ SIMPLE PLATFORM DETECTION
+    let detectedPlatform = null;
+
+    // Check source name
+    for (const platform of paidPlatforms) {
+      if (source.includes(platform)) {
+        detectedPlatform = platform;
+        break;
       }
-      return params;
-    };
-
-    const landingParams = extractAllParams(landingSite);
-    const referringParams = extractAllParams(referringSite);
-    
-    // Merge parameters
-    const allParams = {
-      utm_source: referringParams.utm_source || landingParams.utm_source,
-      utm_medium: referringParams.utm_medium || landingParams.utm_medium,
-      utm_campaign: referringParams.utm_campaign || landingParams.utm_campaign,
-      utm_term: referringParams.utm_term || landingParams.utm_term,
-      utm_content: referringParams.utm_content || landingParams.utm_content,
-      utm_id: referringParams.utm_id || landingParams.utm_id,
-      fbclid: referringParams.fbclid || landingParams.fbclid,
-      campaign_id: referringParams.campaign_id || landingParams.campaign_id,
-      ad_id: referringParams.ad_id || landingParams.ad_id,
-      gclid: referringParams.gclid || landingParams.gclid,
-      ttclid: referringParams.ttclid || landingParams.ttclid,
-      msclkid: referringParams.msclkid || landingParams.msclkid,
-      scclid: referringParams.scclid || landingParams.scclid
-    };
-
-    console.log(`📊 All Parameters:`, allParams);
-
-    // 🎯 ALL PAID PLATFORMS DETECTION
-    const isPaidAds = 
-      // ✅ FACEBOOK & INSTAGRAM ADS
-      (allParams.fbclid && allParams.fbclid.length > 5) ||
-      (allParams.campaign_id && allParams.campaign_id.length > 15) ||
-      (allParams.utm_source === 'facebook' && allParams.utm_medium === 'paid') ||
-      (allParams.utm_source === 'instagram' && allParams.utm_medium === 'paid') ||
-      source.includes('facebook') ||
-      source.includes('instagram') ||
-      source.includes('meta') ||
-
-      // ✅ GOOGLE ADS
-      (allParams.gclid && allParams.gclid.length > 5) ||
-      (allParams.utm_source === 'google' && allParams.utm_medium === 'cpc') ||
-      (allParams.utm_source === 'google' && allParams.utm_medium === 'ppc') ||
-      source.includes('google') ||
-
-      // ✅ TIKTOK ADS
-      (allParams.ttclid && allParams.ttclid.length > 5) ||
-      (allParams.utm_source === 'tiktok' && allParams.utm_medium === 'paid') ||
-      source.includes('tiktok') ||
-
-      // ✅ SNAPCHAT ADS
-      (allParams.scclid && allParams.scclid.length > 5) ||
-      (allParams.utm_source === 'snapchat' && allParams.utm_medium === 'paid') ||
-      source.includes('snapchat') ||
-
-      // ✅ PINTEREST ADS
-      (allParams.utm_source === 'pinterest' && allParams.utm_medium === 'paid') ||
-      source.includes('pinterest') ||
-
-      // ✅ LINKEDIN ADS
-      (allParams.utm_source === 'linkedin' && allParams.utm_medium === 'paid') ||
-      source.includes('linkedin') ||
-
-      // ✅ TWITTER ADS
-      (allParams.utm_source === 'twitter' && allParams.utm_medium === 'paid') ||
-      source.includes('twitter') ||
-
-      // ✅ YOUTUBE ADS
-      (allParams.utm_source === 'youtube' && allParams.utm_medium === 'paid') ||
-      source.includes('youtube') ||
-
-      // ✅ UNIVERSAL PAID INDICATORS
-      (allParams.utm_medium && (
-        allParams.utm_medium.includes('cpc') ||
-        allParams.utm_medium.includes('ppc') ||
-        allParams.utm_medium.includes('paid') ||
-        allParams.utm_medium.includes('social') ||
-        allParams.utm_medium.includes('display') ||
-        allParams.utm_medium.includes('cpv')
-      )) ||
-
-      // ✅ MICROSOFT ADS
-      (allParams.msclkid && allParams.msclkid.length > 5);
-
-    // 🎯 DETECT SPECIFIC PLATFORM
-    let detectedPlatform = 'Unknown';
-    
-    if (allParams.fbclid || source.includes('facebook') || source.includes('instagram')) {
-      detectedPlatform = 'Facebook/Instagram Ads';
-    } else if (allParams.gclid || source.includes('google')) {
-      detectedPlatform = 'Google Ads';
-    } else if (allParams.ttclid || source.includes('tiktok')) {
-      detectedPlatform = 'TikTok Ads';
-    } else if (allParams.scclid || source.includes('snapchat')) {
-      detectedPlatform = 'Snapchat Ads';
-    } else if (source.includes('pinterest')) {
-      detectedPlatform = 'Pinterest Ads';
-    } else if (source.includes('linkedin')) {
-      detectedPlatform = 'LinkedIn Ads';
-    } else if (source.includes('twitter')) {
-      detectedPlatform = 'Twitter Ads';
-    } else if (source.includes('youtube')) {
-      detectedPlatform = 'YouTube Ads';
-    } else if (allParams.msclkid) {
-      detectedPlatform = 'Microsoft Ads';
     }
 
-    // 🎯 ONLY TAG IF PAID ADS
-    if (isPaidAds) {
-      console.log(`🏷️ PAID ADS DETECTED - Platform: ${detectedPlatform}`);
-      
-      // Detailed logging
-      if (allParams.fbclid) console.log(`   - Facebook Click ID detected`);
-      if (allParams.gclid) console.log(`   - Google Click ID detected`);
-      if (allParams.ttclid) console.log(`   - TikTok Click ID detected`);
-      if (allParams.scclid) console.log(`   - Snapchat Click ID detected`);
-      if (allParams.msclkid) console.log(`   - Microsoft Click ID detected`);
-      if (allParams.utm_source) console.log(`   - UTM Source: ${allParams.utm_source}`);
-      if (allParams.utm_medium) console.log(`   - UTM Medium: ${allParams.utm_medium}`);
-      if (source) console.log(`   - Source: ${source}`);
+    // Check referring site
+    if (!detectedPlatform) {
+      for (const platform of paidPlatforms) {
+        if (referringSite.includes(platform)) {
+          detectedPlatform = platform;
+          break;
+        }
+      }
+    }
 
+    // Check landing site
+    if (!detectedPlatform) {
+      for (const platform of paidPlatforms) {
+        if (landingSite.includes(platform)) {
+          detectedPlatform = platform;
+          break;
+        }
+      }
+    }
+
+    // 🎯 ONLY TAG IF PAID PLATFORM DETECTED
+    if (detectedPlatform) {
+      console.log(`🏷️ PAID PLATFORM DETECTED: ${detectedPlatform}`);
+      
       // UPDATE TAGS
       const existingTags = order.tags ? order.tags.split(',').map(t => t.trim()).filter(t => t) : [];
       const cleanTags = existingTags.filter(tag => tag !== 'Paid');
@@ -239,7 +124,7 @@ export default async function handler(req, res) {
         }
       );
 
-      console.log(`✅ Order #${orderNumber} tagged as: Paid (${detectedPlatform})`);
+      console.log(`✅ Order #${orderNumber} tagged as: Paid`);
 
       return res.status(200).json({
         success: true,
@@ -251,7 +136,7 @@ export default async function handler(req, res) {
 
     } else {
       // 🚫 SKIP ORGANIC ORDERS
-      console.log(`⏭️  ORGANIC ORDER - Skipping tag update`);
+      console.log(`⏭️  ORGANIC ORDER - No paid platform detected`);
 
       return res.status(200).json({
         success: false,
