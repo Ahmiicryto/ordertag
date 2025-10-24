@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     const orderId = order.id;
     const orderNumber = order.order_number || order.name || 'N/A';
     
-    // 🏷️ SOURCE DETECTION
+    // 🏷️ SAFE SOURCE DETECTION
     const source = String(order.source_name || '').toLowerCase();
     const landingSite = String(order.landing_site || '').toLowerCase();
     const referringSite = String(order.referring_site || '').toLowerCase();
@@ -45,90 +45,122 @@ export default async function handler(req, res) {
     console.log(`🌐 Landing Site: "${landingSite}"`);
     console.log(`🔗 Referring Site: "${referringSite}"`);
 
-    // 🎯 UTM PARAMETERS EXTRACTION
+    // 🎯 SAFE UTM PARAMETERS EXTRACTION
     const extractUTMParams = (url) => {
-      const params = {};
+      const params = {
+        utm_source: '',
+        utm_medium: '',
+        utm_campaign: '',
+        utm_term: '',
+        utm_content: ''
+      };
+      
+      if (!url || typeof url !== 'string') return params;
+      
       try {
         const urlObj = new URL(url);
         ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].forEach(param => {
-          params[param] = urlObj.searchParams.get(param)?.toLowerCase() || '';
+          const value = urlObj.searchParams.get(param);
+          params[param] = value ? String(value).toLowerCase() : '';
         });
       } catch (e) {
-        // URL parse error - ignore
+        // URL parse error - return empty params
       }
       return params;
     };
 
     const landingUTM = extractUTMParams(landingSite);
     const referringUTM = extractUTMParams(referringSite);
-    const utmParams = { ...landingUTM, ...referringUTM };
+    
+    // Merge UTM parameters safely
+    const utmParams = {
+      utm_source: landingUTM.utm_source || referringUTM.utm_source,
+      utm_medium: landingUTM.utm_medium || referringUTM.utm_medium,
+      utm_campaign: landingUTM.utm_campaign || referringUTM.utm_campaign,
+      utm_term: landingUTM.utm_term || referringUTM.utm_term,
+      utm_content: landingUTM.utm_content || referringUTM.utm_content
+    };
 
     console.log(`📊 UTM Parameters:`, utmParams);
 
-    // ✅ STRICT PAID ADS DETECTION ONLY
+    // ✅ SAFE PAID ADS DETECTION
     const isPaidAds = 
-      // 1. PAID PLATFORMS DIRECT SOURCES
-      source.includes('facebook') || 
-      source.includes('instagram') ||
-      source.includes('meta') ||
-      source.includes('tiktok') ||
-      source.includes('snapchat') ||
-      source.includes('pinterest') ||
-      source.includes('linkedin') ||
-      source.includes('twitter') ||
-      source.includes('youtube') ||
+      // 1. PAID PLATFORMS DIRECT SOURCES (safe check)
+      (source && (
+        source.includes('facebook') || 
+        source.includes('instagram') ||
+        source.includes('meta') ||
+        source.includes('tiktok') ||
+        source.includes('snapchat') ||
+        source.includes('pinterest') ||
+        source.includes('linkedin') ||
+        source.includes('twitter') ||
+        source.includes('youtube')
+      )) ||
       
-      // 2. PAID ADS TRACKING PARAMETERS
-      landingSite.includes('gclid') || // Google Ads
-      referringSite.includes('gclid') ||
-      landingSite.includes('fbclid') || // Facebook Ads
-      referringSite.includes('fbclid') ||
-      landingSite.includes('ttclid') || // TikTok Ads
-      referringSite.includes('ttclid') ||
-      landingSite.includes('msclkid') || // Microsoft Ads
-      referringSite.includes('msclkid') ||
+      // 2. PAID ADS TRACKING PARAMETERS (safe check)
+      (landingSite && (
+        landingSite.includes('gclid') || // Google Ads
+        landingSite.includes('fbclid') || // Facebook Ads
+        landingSite.includes('ttclid') || // TikTok Ads
+        landingSite.includes('msclkid') // Microsoft Ads
+      )) ||
+      (referringSite && (
+        referringSite.includes('gclid') ||
+        referringSite.includes('fbclid') ||
+        referringSite.includes('ttclid') ||
+        referringSite.includes('msclkid')
+      )) ||
       
-      // 3. UTM MEDIUM = PAID
-      utmParams.utm_medium.includes('cpc') ||
-      utmParams.utm_medium.includes('ppc') ||
-      utmParams.utm_medium.includes('paid') ||
-      utmParams.utm_medium.includes('social') ||
-      utmParams.utm_medium.includes('display') ||
-      utmParams.utm_medium.includes('cpv') ||
+      // 3. UTM MEDIUM = PAID (safe check)
+      (utmParams.utm_medium && (
+        utmParams.utm_medium.includes('cpc') ||
+        utmParams.utm_medium.includes('ppc') ||
+        utmParams.utm_medium.includes('paid') ||
+        utmParams.utm_medium.includes('social') ||
+        utmParams.utm_medium.includes('display') ||
+        utmParams.utm_medium.includes('cpv')
+      )) ||
       
-      // 4. UTM SOURCE = PAID PLATFORMS
-      utmParams.utm_source.includes('facebook') ||
-      utmParams.utm_source.includes('instagram') ||
-      utmParams.utm_source.includes('tiktok') ||
-      utmParams.utm_source.includes('snapchat') ||
-      utmParams.utm_source.includes('pinterest') ||
-      utmParams.utm_source.includes('linkedin') ||
-      utmParams.utm_source.includes('twitter') ||
-      utmParams.utm_source.includes('youtube') ||
-      utmParams.utm_source.includes('google') ||
+      // 4. UTM SOURCE = PAID PLATFORMS (safe check)
+      (utmParams.utm_source && (
+        utmParams.utm_source.includes('facebook') ||
+        utmParams.utm_source.includes('instagram') ||
+        utmParams.utm_source.includes('tiktok') ||
+        utmParams.utm_source.includes('snapchat') ||
+        utmParams.utm_source.includes('pinterest') ||
+        utmParams.utm_source.includes('linkedin') ||
+        utmParams.utm_source.includes('twitter') ||
+        utmParams.utm_source.includes('youtube') ||
+        utmParams.utm_source.includes('google')
+      )) ||
       
-      // 5. SPECIFIC PAID PATTERNS IN URL
-      landingSite.includes('utm_medium=cpc') ||
-      landingSite.includes('utm_medium=ppc') ||
-      landingSite.includes('utm_medium=paid') ||
-      referringSite.includes('utm_medium=cpc') ||
-      referringSite.includes('utm_medium=ppc') ||
-      referringSite.includes('utm_medium=paid') ||
+      // 5. SPECIFIC PAID PATTERNS IN URL (safe check)
+      (landingSite && (
+        landingSite.includes('utm_medium=cpc') ||
+        landingSite.includes('utm_medium=ppc') ||
+        landingSite.includes('utm_medium=paid')
+      )) ||
+      (referringSite && (
+        referringSite.includes('utm_medium=cpc') ||
+        referringSite.includes('utm_medium=ppc') ||
+        referringSite.includes('utm_medium=paid')
+      )) ||
 
-      // 6. PAID CAMPAIGN INDICATORS
-      utmParams.utm_campaign.includes('ads') ||
-      utmParams.utm_campaign.includes('cpc') ||
-      utmParams.utm_campaign.includes('ppc') ||
-      utmParams.utm_campaign.includes('promo') ||
-      utmParams.utm_campaign.includes('sale') ||
-      utmParams.utm_campaign.includes('conversion') ||
-      utmParams.utm_campaign.includes('retargeting');
+      // 6. PAID CAMPAIGN INDICATORS (safe check)
+      (utmParams.utm_campaign && (
+        utmParams.utm_campaign.includes('ads') ||
+        utmParams.utm_campaign.includes('cpc') ||
+        utmParams.utm_campaign.includes('ppc') ||
+        utmParams.utm_campaign.includes('promo') ||
+        utmParams.utm_campaign.includes('sale') ||
+        utmParams.utm_campaign.includes('conversion') ||
+        utmParams.utm_campaign.includes('retargeting')
+      ));
 
     // 🎯 ONLY TAG IF PAID ADS
     if (isPaidAds) {
       console.log(`🏷️ PAID ADS DETECTED - Adding "Paid" tag`);
-      console.log(`   - Source: ${source}`);
-      console.log(`   - UTM: ${JSON.stringify(utmParams)}`);
 
       // UPDATE TAGS - Only add "Paid" tag
       const existingTags = order.tags ? order.tags.split(',').map(t => t.trim()).filter(t => t) : [];
@@ -170,24 +202,18 @@ export default async function handler(req, res) {
         success: true,
         message: `Order tagged as Paid`,
         orderNumber: orderNumber,
-        trafficSource: 'Paid',
-        detectedSource: source,
-        utmParams: utmParams
+        trafficSource: 'Paid'
       });
 
     } else {
       // 🚫 SKIP ORGANIC ORDERS - No tag update
       console.log(`⏭️  ORGANIC ORDER - Skipping tag update`);
-      console.log(`   - Source: ${source}`);
-      console.log(`   - UTM: ${JSON.stringify(utmParams)}`);
 
       return res.status(200).json({
         success: true,
         message: `Organic order - no tag added`,
         orderNumber: orderNumber,
-        trafficSource: 'Organic',
-        detectedSource: source,
-        utmParams: utmParams
+        trafficSource: 'Organic'
       });
     }
 
