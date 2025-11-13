@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     const orderId = order.id;
     const orderNumber = order.order_number || order.name || 'N/A';
     
-    // 🏷️ SIMPLE SOURCE DETECTION
+    // 🏷️ SOURCE DETECTION
     const source = String(order.source_name || '').toLowerCase();
     const landingSite = String(order.landing_site || '').toLowerCase();
     const referringSite = String(order.referring_site || '').toLowerCase();
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     console.log(`🌐 Landing Site: "${landingSite}"`);
     console.log(`🔗 Referring Site: "${referringSite}"`);
 
-    // 🎯 ALL PAID PLATFORMS LIST
+    // 🎯 PAID PLATFORMS LIST
     const paidPlatforms = [
       'facebook',
       'instagram', 
@@ -59,13 +59,15 @@ export default async function handler(req, res) {
       'google'
     ];
 
-    // ✅ SIMPLE PLATFORM DETECTION
+    // ✅ PLATFORM DETECTION WITH LINK
     let detectedPlatform = null;
+    let detectedLink = '';
 
     // Check source name
     for (const platform of paidPlatforms) {
       if (source.includes(platform)) {
         detectedPlatform = platform;
+        detectedLink = `Source: ${source}`;
         break;
       }
     }
@@ -75,6 +77,7 @@ export default async function handler(req, res) {
       for (const platform of paidPlatforms) {
         if (referringSite.includes(platform)) {
           detectedPlatform = platform;
+          detectedLink = `Referring: ${referringSite}`;
           break;
         }
       }
@@ -85,6 +88,7 @@ export default async function handler(req, res) {
       for (const platform of paidPlatforms) {
         if (landingSite.includes(platform)) {
           detectedPlatform = platform;
+          detectedLink = `Landing: ${landingSite}`;
           break;
         }
       }
@@ -93,11 +97,25 @@ export default async function handler(req, res) {
     // 🎯 ONLY TAG IF PAID PLATFORM DETECTED
     if (detectedPlatform) {
       console.log(`🏷️ PAID PLATFORM DETECTED: ${detectedPlatform}`);
+      console.log(`🔗 Detected from: ${detectedLink}`);
       
-      // UPDATE TAGS
+      // UPDATE TAGS - "Paid" + Platform name + Link
       const existingTags = order.tags ? order.tags.split(',').map(t => t.trim()).filter(t => t) : [];
-      const cleanTags = existingTags.filter(tag => tag !== 'Paid');
+      
+      // Remove old paid-related tags
+      const cleanTags = existingTags.filter(tag => 
+        !tag.startsWith('Paid') && 
+        !paidPlatforms.some(platform => tag.toLowerCase().includes(platform))
+      );
+
+      // Add new tags
       cleanTags.push('Paid');
+      
+      // Shorten link for tag (max 50 characters)
+      const shortLink = detectedLink.length > 50 ? 
+        detectedLink.substring(0, 47) + '...' : detectedLink;
+      cleanTags.push(shortLink);
+
       const updatedTags = cleanTags.join(', ');
       
       console.log(`📝 Final Tags: ${updatedTags}`);
@@ -131,7 +149,8 @@ export default async function handler(req, res) {
         message: `Order tagged as Paid`,
         orderNumber: orderNumber,
         trafficSource: 'Paid',
-        platform: detectedPlatform
+        platform: detectedPlatform,
+        detectedFrom: detectedLink
       });
 
     } else {
